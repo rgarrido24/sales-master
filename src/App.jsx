@@ -4,7 +4,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, query, onSnapshot, writeBatch, doc, getDocs, limit, addDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore';
 import { Shield, Users, Cloud, LogOut, MessageSquare, Search, RefreshCw, Database, Settings, Link as LinkIcon, Check, AlertTriangle, PlayCircle, List, FileSpreadsheet, UploadCloud, Sparkles, PlusCircle, Download, MapPin, Wifi, FileText, Trash2, DollarSign, Wrench, Phone, MessageCircleQuestion, Send, X } from 'lucide-react';
 
-// --- PANTALLA DE ERROR (DIAGNÓSTICO) ---
+// --- PANTALLA DE ERROR ---
 function ErrorDisplay({ message, details }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center font-sans">
@@ -18,24 +18,34 @@ function ErrorDisplay({ message, details }) {
           <strong>Solución:</strong> {details || "Verifica la configuración en Vercel."}
         </div>
         <button onClick={() => window.location.reload()} className="mt-8 w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors">
-          Ya lo arreglé, recargar
+          Recargar
         </button>
       </div>
     </div>
   );
 }
 
-// --- CONFIGURACIÓN PARA VERCEL ---
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+// --- CONFIGURACIÓN (MODO SEGURO) ---
+const getEnv = () => {
+  try {
+    return import.meta.env || {};
+  } catch (e) {
+    return {};
+  }
 };
 
-const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
+const env = getEnv();
+
+const firebaseConfig = {
+  apiKey: env.VITE_FIREBASE_API_KEY,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: env.VITE_FIREBASE_APP_ID
+};
+
+const geminiApiKey = env.VITE_GEMINI_API_KEY;
 
 // --- INICIALIZACIÓN ---
 let app, auth, db;
@@ -43,11 +53,12 @@ let initError = null;
 
 try {
   if (!firebaseConfig.apiKey) {
-    throw new Error("Falta la API KEY de Firebase.");
+    // No lanzamos error aquí para dejar que el componente ErrorDisplay lo maneje
+  } else {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
   }
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
 } catch (e) {
   console.error("Error de inicio:", e);
   initError = e;
@@ -103,11 +114,16 @@ const downloadCSV = (data, filename) => {
 
 // --- APP PRINCIPAL ---
 export default function SalesMasterCloud() {
-  if (initError) {
+  // 1. Chequeo de Configuración
+  if (!firebaseConfig.apiKey) {
     return <ErrorDisplay 
-      message={initError.message} 
-      details="Ve a Vercel -> Settings -> Environment Variables. Asegúrate de haber agregado las 7 claves (VITE_FIREBASE_...) correctamente y sin comillas extra." 
+      message="Faltan las Variables de Entorno" 
+      details="Asegúrate de haber actualizado 'vite.config.js' con 'target: esnext' y de tener las claves en Vercel." 
     />;
+  }
+
+  if (initError) {
+    return <ErrorDisplay message={initError.message} details="Error interno de Firebase." />;
   }
 
   const [user, setUser] = useState(null);
@@ -134,7 +150,7 @@ export default function SalesMasterCloud() {
   if (authError) {
     return <ErrorDisplay 
       message={authError.message} 
-      details="Error de autenticación. Habilita el proveedor 'Anónimo' en Firebase Console -> Authentication -> Sign-in method." 
+      details="Error de autenticación. Habilita el proveedor 'Anónimo' en Firebase Console -> Authentication." 
     />;
   }
 
@@ -146,6 +162,9 @@ export default function SalesMasterCloud() {
     : <VendorDashboard user={user} myName={vendorName} currentModule={currentModule} setModule={setCurrentModule} />;
 }
 
+// ... (El resto de los componentes LoginScreen, AdminDashboard y VendorDashboard siguen igual que en la v10) ...
+// Para ahorrar espacio y evitar errores de pegado, asumo que tienes el resto. 
+// SI NO LO TIENES, DÍMELO Y TE LO PEGO AQUÍ ABAJO.
 // --- PANTALLAS ---
 function LoginScreen({ onLogin }) {
   const [mode, setMode] = useState('menu'); 
