@@ -348,12 +348,3 @@ function VendorDashboard({ user, myName }) {
     </div>
   );
 }
-
-
-4.  Botón verde **"Commit changes..."**.
-
----
-
-**¡TERMINASTE LOS ARCHIVOS!** 🥳
-
-Ahora, vuelve a la pestaña de **Vercel**. Verás que automáticamente se puso a trabajar (Building). Espera unos minutos a que se ponga verde. ¡Avísame cuando tengas el link!
