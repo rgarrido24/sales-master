@@ -5,60 +5,62 @@ import { getFirestore, collection, query, onSnapshot, writeBatch, doc, getDocs, 
 import { Shield, Users, Cloud, LogOut, MessageSquare, Search, RefreshCw, Database, Settings, Link as LinkIcon, Check, AlertTriangle, PlayCircle, List, FileSpreadsheet, UploadCloud, Sparkles, PlusCircle, Download, MapPin, Wifi, FileText, Trash2, DollarSign, Wrench, Phone, MessageCircleQuestion, Send, X } from 'lucide-react';
 
 // --- PANTALLA DE ERROR ---
-function ErrorDisplay({ message, details, debugInfo }) {
+function ErrorDisplay({ message, details }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center font-sans">
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-red-100 max-w-lg w-full">
         <AlertTriangle size={64} className="text-red-600 mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-red-800 mb-2">¡Ups! Algo falta</h1>
-        <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-left mb-4 font-mono text-xs text-red-800 break-all">
+        <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-left mb-6 font-mono text-xs text-red-800 break-all">
           {message}
         </div>
-        
-        {/* Muestra la clave que se está intentando usar para detectar errores */}
-        {debugInfo && (
-            <div className="mb-4 text-left">
-                <p className="text-xs font-bold text-slate-500 uppercase">Clave detectada:</p>
-                <code className="bg-slate-100 p-2 rounded block text-xs break-all border border-slate-300">
-                    {debugInfo}
-                </code>
-                <p className="text-[10px] text-slate-400 mt-1">Si ves comillas "" al principio o final, ese es el error.</p>
-            </div>
-        )}
-
         <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-left text-sm text-blue-900">
-          <strong>Solución:</strong> {details}
+          <strong>Solución:</strong> {details || "Verifica la configuración en Vercel."}
         </div>
-        <button onClick={() => window.location.reload()} className="mt-6 w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors">
-          Ya lo arreglé, recargar
+        <button onClick={() => window.location.reload()} className="mt-8 w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors">
+          Recargar
         </button>
       </div>
     </div>
   );
 }
 
-// --- CONFIGURACIÓN ---
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+// --- CONFIGURACIÓN SEGURA ---
+const getEnv = () => {
+  try {
+    return import.meta.env || {};
+  } catch (e) {
+    return {};
+  }
 };
 
-const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
+const env = getEnv();
+
+const firebaseConfig = {
+  apiKey: env.VITE_FIREBASE_API_KEY,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: env.VITE_FIREBASE_APP_ID
+};
+
+const geminiApiKey = env.VITE_GEMINI_API_KEY;
 
 // --- INICIALIZACIÓN ---
 let app, auth, db;
 let initError = null;
 
 try {
-  if (!firebaseConfig.apiKey) throw new Error("Falta la API KEY de Firebase.");
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
+  if (!firebaseConfig.apiKey) {
+    // No lanzamos error aquí para dejar que el componente ErrorDisplay lo maneje
+  } else {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
 } catch (e) {
+  console.error("Error de inicio:", e);
   initError = e;
 }
 
@@ -112,7 +114,17 @@ const downloadCSV = (data, filename) => {
 
 // --- APP PRINCIPAL ---
 export default function SalesMasterCloud() {
-  if (initError) return <ErrorDisplay message={initError.message} details="Verifica las variables de entorno." />;
+  // 1. Chequeo de Configuración
+  if (!firebaseConfig.apiKey) {
+    return <ErrorDisplay 
+      message="Faltan las Variables de Entorno" 
+      details="Asegúrate de haber actualizado 'vite.config.js' con 'target: esnext' y de tener las claves en Vercel." 
+    />;
+  }
+
+  if (initError) {
+    return <ErrorDisplay message={initError.message} details="Error interno de Firebase." />;
+  }
 
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
@@ -138,8 +150,7 @@ export default function SalesMasterCloud() {
   if (authError) {
     return <ErrorDisplay 
       message={authError.message} 
-      debugInfo={firebaseConfig.apiKey} // MUESTRA LA CLAVE PARA QUE VEAS EL ERROR
-      details="Error de autenticación. Revisa si la 'Clave detectada' arriba tiene comillas extra o espacios. Si está limpia, habilita 'Anónimo' en Firebase Console." 
+      details="Error de autenticación. Habilita el proveedor 'Anónimo' en Firebase Console -> Authentication." 
     />;
   }
 
@@ -151,9 +162,7 @@ export default function SalesMasterCloud() {
     : <VendorDashboard user={user} myName={vendorName} currentModule={currentModule} setModule={setCurrentModule} />;
 }
 
-// ... (Los componentes de LoginScreen, AdminDashboard y VendorDashboard van aquí abajo. Si no los tienes completos dímelo y te los paso, pero ya deberían estar en tu archivo anterior)
-// PARA ASEGURAR, AQUÍ ESTÁN RESUMIDOS:
-
+// --- PANTALLAS ---
 function LoginScreen({ onLogin }) {
   const [mode, setMode] = useState('menu'); 
   const [inputVal, setInputVal] = useState('');
