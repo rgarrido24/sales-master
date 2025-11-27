@@ -46,6 +46,7 @@ let app, auth, db;
 let initError = null;
 
 try {
+  // Verificación crítica antes de iniciar
   if (!firebaseConfig.apiKey) {
     throw new Error("Falta la API KEY de Firebase.");
   }
@@ -107,10 +108,11 @@ const downloadCSV = (data, filename) => {
 
 // --- APP PRINCIPAL ---
 export default function SalesMasterCloud() {
+  // 1. Mostrar error claro si la configuración falló
   if (initError) {
     return <ErrorDisplay 
       message={initError.message} 
-      details="Ve a Vercel -> Settings -> Environment Variables. Asegúrate de haber agregado las 7 claves (VITE_FIREBASE_...) correctamente y sin comillas extra." 
+      details="Ve a Vercel -> Settings -> Environment Variables. Asegúrate de haber agregado las 7 claves (VITE_FIREBASE_...) correctamente." 
     />;
   }
 
