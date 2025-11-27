@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, query, onSnapshot, writeBatch, doc, getDocs, limit, addDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore';
@@ -11,16 +11,12 @@ function ErrorDisplay({ message, details }) {
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-red-100 max-w-lg w-full">
         <AlertTriangle size={64} className="text-red-600 mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-red-800 mb-2">¡Ups! Algo falta</h1>
-        <p className="text-slate-600 mb-6">La aplicación no puede arrancar por esto:</p>
-        
         <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-left mb-6 font-mono text-xs text-red-800 break-all">
           {message}
         </div>
-
         <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-left text-sm text-blue-900">
           <strong>Solución:</strong> {details || "Verifica la configuración en Vercel."}
         </div>
-
         <button onClick={() => window.location.reload()} className="mt-8 w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors">
           Ya lo arreglé, recargar
         </button>
@@ -29,76 +25,45 @@ function ErrorDisplay({ message, details }) {
   );
 }
 
-// --- CONFIGURACIÓN INTELIGENTE (HÍBRIDA) ---
-const getFirebaseConfig = () => {
-  // 1. Si estamos en el chat (Preview), usamos la config inyectada
-  if (typeof __firebase_config !== 'undefined') {
-    return JSON.parse(__firebase_config);
-  }
-  
-  // 2. Si estamos en Vercel (Producción)
-  try {
-    const env = import.meta.env || {};
-    return {
-      apiKey: env.VITE_FIREBASE_API_KEY,
-      authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
-      projectId: env.VITE_FIREBASE_PROJECT_ID,
-      storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-      appId: env.VITE_FIREBASE_APP_ID
-    };
-  } catch (e) {
-    return {};
-  }
+// --- CONFIGURACIÓN PARA VERCEL ---
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-const getGeminiKey = () => {
-  // 1. Preview
-  if (typeof __initial_auth_token === 'undefined') { 
-     // Variable dummy para local si no hay token
-  }
-  // 2. Vercel
-  try {
-    const env = import.meta.env || {};
-    return env.VITE_GEMINI_API_KEY || "";
-  } catch (e) {
-    return "";
-  }
-};
+const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-// Inicializar Variables
-const firebaseConfig = getFirebaseConfig();
-const geminiApiKey = getGeminiKey();
-
+// --- INICIALIZACIÓN ---
 let app, auth, db;
 let initError = null;
 
 try {
-  // Validación crítica
-  if (!firebaseConfig || !firebaseConfig.apiKey) {
-    // Esperamos a la validación en el componente principal
-  } else {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
+  if (!firebaseConfig.apiKey) {
+    throw new Error("Falta la API KEY de Firebase.");
   }
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
 } catch (e) {
-  console.error("Error inicializando Firebase:", e);
+  console.error("Error de inicio:", e);
   initError = e;
 }
 
-// --- FUNCIONES AUXILIARES ---
-
+// ... Funciones Auxiliares ...
 async function callGemini(prompt) {
-  if (!geminiApiKey) return "Error: Falta API Key de Gemini en Vercel (VITE_GEMINI_API_KEY).";
+  if (!geminiApiKey) return "Error: Falta API Key de Gemini en Vercel";
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
     );
     const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Error: La IA no respondió.";
-  } catch (error) { return "Error de conexión con la IA."; }
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Error IA";
+  } catch (error) { return "Error conexión IA"; }
 }
 
 function parseCSV(text) {
@@ -116,7 +81,7 @@ function parseCSV(text) {
 }
 
 const downloadCSV = (data, filename) => {
-  if (!data || !data.length) return alert("No hay datos para exportar");
+  if (!data || !data.length) return alert("No hay datos");
   const flatData = data.map(row => {
       const { id, createdAt, ...rest } = row; 
       let dateStr = '';
@@ -138,16 +103,10 @@ const downloadCSV = (data, filename) => {
 
 // --- APP PRINCIPAL ---
 export default function SalesMasterCloud() {
-  // 1. Chequeo de Inicialización
   if (initError) {
-    return <ErrorDisplay message={initError.message} details="Error crítico al conectar con Firebase. Revisa la consola." />;
-  }
-  
-  // 2. Chequeo de Configuración Faltante
-  if (!firebaseConfig || !firebaseConfig.apiKey) {
     return <ErrorDisplay 
-      message="Faltan las Variables de Entorno" 
-      details="No se encontraron las llaves API. Ve a Vercel -> Settings -> Environment Variables y asegúrate de haber agregado las 7 claves (VITE_FIREBASE_API_KEY, etc.) y de haber hecho un Redeploy." 
+      message={initError.message} 
+      details="Ve a Vercel -> Settings -> Environment Variables. Asegúrate de haber agregado las 7 claves (VITE_FIREBASE_...) correctamente y sin comillas extra." 
     />;
   }
 
@@ -175,7 +134,7 @@ export default function SalesMasterCloud() {
   if (authError) {
     return <ErrorDisplay 
       message={authError.message} 
-      details="Error de autenticación. Habilita el proveedor 'Anónimo' en Firebase Console -> Compilación -> Authentication -> Sign-in method." 
+      details="Error de autenticación. Habilita el proveedor 'Anónimo' en Firebase Console -> Authentication -> Sign-in method." 
     />;
   }
 
