@@ -1,59 +1,102 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  collection, 
-  query, 
-  onSnapshot, 
-  writeBatch,
-  doc,
-  getDocs,
-  limit
-} from 'firebase/firestore';
-import { 
-  Shield, Users, Cloud, LogOut, MessageSquare, Search, Lock, RefreshCw, 
-  Database, Settings, Link as LinkIcon, Check, AlertTriangle, PlayCircle, 
-  List, FileSpreadsheet, UploadCloud, Sparkles, Bot, X
-} from 'lucide-react';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, query, onSnapshot, writeBatch, doc, getDocs, limit } from 'firebase/firestore';
+import { Shield, Users, Cloud, LogOut, MessageSquare, Search, Lock, RefreshCw, Database, Settings, Link as LinkIcon, Check, AlertTriangle, PlayCircle, List, FileSpreadsheet, UploadCloud, Sparkles, Bot, X } from 'lucide-react';
 
-// CONFIGURACIÓN PARA VERCEL
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
-};
+// --- COMPONENTE DE PANTALLA DE ERROR (DIAGNÓSTICO) ---
+function ErrorDisplay({ message, details }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center font-sans">
+      <div className="bg-white p-8 rounded-2xl shadow-xl border border-red-100 max-w-lg w-full">
+        <AlertTriangle size={64} className="text-red-600 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold text-red-800 mb-2">¡Detectamos el problema!</h1>
+        <p className="text-slate-600 mb-6">La aplicación no pudo iniciar por la siguiente razón:</p>
+        
+        <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-left mb-6">
+          <p className="font-bold text-red-700 text-xs uppercase tracking-wider mb-1">Error Técnico:</p>
+          <code className="text-sm text-red-900 font-mono break-words">{message}</code>
+        </div>
 
-// Inicialización segura
-let app, auth, db;
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-} catch (e) {
-  console.error("Esperando configuración de Firebase...", e);
+        {details && (
+          <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-left">
+            <p className="font-bold text-blue-700 text-xs uppercase tracking-wider mb-1">¿Cómo arreglarlo?</p>
+            <p className="text-sm text-blue-900">{details}</p>
+          </div>
+        )}
+
+        <button 
+          onClick={() => window.location.reload()} 
+          className="mt-8 w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-200"
+        >
+          Intentar Recargar
+        </button>
+      </div>
+    </div>
+  );
 }
 
-const appId = 'sales-master-production';
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+// --- CONFIGURACIÓN INTELIGENTE ---
+const getFirebaseConfig = () => {
+  try {
+    // Verificamos si import.meta existe antes de usarlo
+    const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
+    
+    // Si estamos en el chat (Preview), usamos la config inyectada
+    if (typeof __firebase_config !== 'undefined') {
+      return JSON.parse(__firebase_config);
+    }
 
+    // Si estamos en Vercel, usamos las variables de entorno
+    return {
+      apiKey: env.VITE_FIREBASE_API_KEY,
+      authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId: env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+      appId: env.VITE_FIREBASE_APP_ID
+    };
+  } catch (e) {
+    return {};
+  }
+};
+
+const getGeminiKey = () => {
+  try {
+    const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
+    return env.VITE_GEMINI_API_KEY || "";
+  } catch (e) {
+    return "";
+  }
+};
+
+// Inicializar Variables
+const firebaseConfig = getFirebaseConfig();
+const geminiApiKey = getGeminiKey();
+
+let app, auth, db;
+let initError = null;
+
+try {
+  if (!firebaseConfig || !firebaseConfig.apiKey) {
+    // Esperamos a la validación en el componente
+  } else {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
+} catch (e) {
+  console.error("Error inicializando Firebase:", e);
+  initError = e;
+}
+
+// Funciones Auxiliares
 async function callGemini(prompt) {
-  if (!apiKey) return "Error: Falta API Key en Vercel";
+  if (!geminiApiKey) return "Error: Falta API Key de Gemini en Vercel.";
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      }
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
     );
     const data = await response.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || "Error IA";
@@ -61,59 +104,83 @@ async function callGemini(prompt) {
 }
 
 function parseCSV(text) {
-  const arr = []; 
-  let quote = false;  
-  let col = 0, c = 0;
-  let row = ['']; 
+  const arr = []; let quote = false; let col = 0, c = 0; let row = [''];
   for (c = 0; c < text.length; c++) {
     let cc = text[c], nc = text[c+1];
     arr[col] = arr[col] || [];
-    if (cc === '"') {
-      if (quote && nc === '"') { row[col] += '"'; ++c; } else { quote = !quote; }
-    } else if (cc === ',' && !quote) { 
-      col++; row[col] = ''; 
-    } else if ((cc === '\r' || cc === '\n') && !quote) {
-      if (cc === '\r' && nc === '\n') ++c;
-      if (row.length > 1 || row[0].length > 0) arr.push(row);
-      row = ['']; col = 0;
-    } else {
-      row[col] += cc;
-    }
+    if (cc === '"') { if (quote && nc === '"') { row[col] += '"'; ++c; } else { quote = !quote; } } 
+    else if (cc === ',' && !quote) { col++; row[col] = ''; } 
+    else if ((cc === '\r' || cc === '\n') && !quote) { if (cc === '\r' && nc === '\n') ++c; if (row.length > 1 || row[0].length > 0) arr.push(row); row = ['']; col = 0; } 
+    else { row[col] += cc; }
   }
   if (row.length > 1 || row[0].length > 0) arr.push(row);
   return arr;
 }
 
+// --- COMPONENTE PRINCIPAL ---
 export default function SalesMasterCloud() {
-  const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null); 
-  const [vendorName, setVendorName] = useState(''); 
-  const [isAuthenticating, setIsAuthenticating] = useState(true);
+  // 1. Chequeo de Inicialización
+  if (initError) {
+    return <ErrorDisplay message={initError.message} details="Error crítico al conectar con Firebase. Revisa la consola." />;
+  }
   
+  // 2. Chequeo de Configuración Faltante
+  if (!firebaseConfig || !firebaseConfig.apiKey) {
+    return <ErrorDisplay 
+      message="Faltan las Variables de Entorno" 
+      details="No se encontraron las llaves API. Ve a Vercel -> Settings -> Environment Variables y asegúrate de haber agregado las 7 claves (VITE_FIREBASE_API_KEY, etc.) y de haber hecho un Redeploy." 
+    />;
+  }
+
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
+  const [vendorName, setVendorName] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(true);
+  const [runtimeError, setRuntimeError] = useState(null);
+
   useEffect(() => {
     const initAuth = async () => {
-      if (!auth) return; 
-      setIsAuthenticating(true);
-      try { await signInAnonymously(auth); } 
-      catch (error) { console.error(error); } 
-      finally { setIsAuthenticating(false); }
+      if (!auth) return;
+      try {
+        await signInAnonymously(auth);
+      } catch (error) {
+        console.error("Error Auth:", error);
+        setRuntimeError(error);
+      } finally {
+        setIsAuthenticating(false);
+      }
     };
     initAuth();
     if (auth) return onAuthStateChanged(auth, (u) => setUser(u));
   }, []);
 
-  if (!auth) return <div className="h-screen flex flex-col items-center justify-center bg-slate-50 text-red-600 p-4 text-center"><AlertTriangle size={48}/><h2 className="text-xl font-bold mt-4">Falta Configuración</h2><p>Recuerda agregar las Variables de Entorno en Vercel (Firebase Keys).</p></div>;
-
-  if (isAuthenticating) return <div className="h-screen flex items-center justify-center bg-slate-50 text-blue-600"><RefreshCw className="animate-spin"/></div>;
+  // 3. Chequeo de Error en Ejecución (Auth)
+  if (runtimeError) {
+    return <ErrorDisplay 
+      message={runtimeError.message} 
+      details="Falló la autenticación. Ve a Firebase Console -> Compilación -> Authentication -> Sign-in method y habilita el proveedor 'Anónimo'." 
+    />;
+  }
+  
+  if (isAuthenticating) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-50 text-blue-600 gap-4">
+        <RefreshCw className="animate-spin" size={48}/>
+        <p className="font-bold animate-pulse text-slate-500">Conectando con la nube...</p>
+      </div>
+    );
+  }
+  
   if (!role) return <LoginScreen onLogin={(r, name) => { setRole(r); setVendorName(name); }} />;
 
   return role === 'admin' ? <AdminDashboard user={user} /> : <VendorDashboard user={user} myName={vendorName} />;
 }
 
+// --- PANTALLAS DE LA APP ---
+
 function LoginScreen({ onLogin }) {
   const [mode, setMode] = useState('menu'); 
   const [inputVal, setInputVal] = useState('');
-
   if (mode === 'menu') {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
@@ -313,7 +380,7 @@ function VendorDashboard({ user, myName }) {
   useEffect(() => {
     if (!user || !myName) return;
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sales_master'));
-    return onSnapshot(q, (snapshot) => {
+    return onSnapshot(q, (snap) => {
       const all = snapshot.docs.map(doc => doc.data());
       const mine = all.filter(i => i['normalized_vendor']?.includes(myName.toLowerCase()));
       setData(mine); setLoading(false);
