@@ -4,83 +4,51 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, query, onSnapshot, writeBatch, doc, getDocs, limit, addDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore';
 import { Shield, Users, Cloud, LogOut, MessageSquare, Search, RefreshCw, Database, Settings, Link as LinkIcon, Check, AlertTriangle, PlayCircle, List, FileSpreadsheet, UploadCloud, Sparkles, PlusCircle, Download, MapPin, Wifi, FileText, Trash2, DollarSign, Wrench, Phone, MessageCircleQuestion, Send, X } from 'lucide-react';
 
-// --- PANTALLA DE ERROR CON LUPA ---
-function ErrorDisplay({ message, details, currentKey }) {
+// --- CONFIGURACIÓN DIRECTA (MODO DE EMERGENCIA) ---
+// Tus claves están escritas aquí para evitar errores de Vercel
+const firebaseConfig = {
+  apiKey: "AIzaSyDlCB-oW2hF7BLT4t9wYTORbwVh4LLJ96k",
+  authDomain: "sales-master-4a972.firebaseapp.com",
+  projectId: "sales-master-4a972",
+  storageBucket: "sales-master-4a972.firebasestorage.app",
+  messagingSenderId: "813531501662",
+  appId: "1:813531501662:web:72ca3e181d0f4e551f50cf"
+};
+
+// Pon aquí tu clave de IA si la tienes a la mano, si no, funcionará sin ella.
+// Si tienes la clave AIza... de Google AI, pégala dentro de las comillas abajo.
+const geminiApiKey = ""; 
+
+// --- INICIALIZACIÓN ---
+let app, auth, db;
+try {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+} catch (e) {
+  console.error("Error inicializando:", e);
+}
+
+// --- PANTALLA DE ERROR ---
+function ErrorDisplay({ message }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center font-sans">
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-red-100 max-w-lg w-full">
         <AlertTriangle size={64} className="text-red-600 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-red-800 mb-2">Error de Acceso</h1>
-        
-        <div className="bg-red-50 p-3 rounded border border-red-200 text-left mb-4 text-xs text-red-800 font-mono break-all">
-          {message}
-        </div>
-
-        {/* AQUÍ ESTÁ LA LUPA DE DIAGNÓSTICO */}
-        <div className="bg-slate-100 p-4 rounded-xl text-left mb-4 border border-slate-300">
-            <p className="text-xs font-bold text-slate-500 uppercase mb-1">Vercel está usando esta clave:</p>
-            <code className="text-sm font-bold text-slate-800 break-all bg-white p-1 rounded block border">
-              {currentKey ? `"${currentKey}"` : "NINGUNA (Está vacía)"}
-            </code>
-            <p className="text-[10px] text-orange-600 mt-2 font-bold">
-               👀 OJO: Si ves comillas dobles (" ") pegadas a tu clave arriba, ese es el error.
-            </p>
-        </div>
-
-        <div className="bg-blue-50 p-3 rounded border border-blue-200 text-left text-sm text-blue-900">
-          <strong>Solución:</strong> Ve a Vercel, edita la variable <b>VITE_FIREBASE_API_KEY</b> y borra las comillas o espacios que sobran.
-        </div>
-
-        <button onClick={() => window.location.reload()} className="mt-6 w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors">
-          Ya corregí la clave, Recargar
-        </button>
+        <h1 className="text-2xl font-bold text-red-800 mb-2">Problema de Acceso</h1>
+        <p className="text-red-600 font-mono text-xs mb-4 bg-red-50 p-2 rounded">{message}</p>
+        <p className="text-slate-600 text-sm">
+           Si ves el error "auth/operation-not-allowed", significa que falta habilitar el acceso <b>Anónimo</b> en Firebase.
+        </p>
+        <button onClick={() => window.location.reload()} className="mt-6 w-full py-3 bg-red-600 text-white rounded-xl font-bold">Reintentar</button>
       </div>
     </div>
   );
 }
 
-// --- CONFIGURACIÓN SEGURA ---
-const getEnv = () => {
-  try { return import.meta.env || {}; } catch (e) { return {}; }
-};
-
-const env = getEnv();
-
-const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY, // Esta es la que suele fallar por comillas
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: env.VITE_FIREBASE_APP_ID
-};
-
-const geminiApiKey = env.VITE_GEMINI_API_KEY;
-
-// --- INICIALIZACIÓN ---
-let app, auth, db;
-let initError = null;
-
-try {
-  // Intentamos limpiar la clave si el usuario puso comillas por error, solo para que funcione el init
-  if (firebaseConfig.apiKey && (firebaseConfig.apiKey.startsWith('"') || firebaseConfig.apiKey.startsWith("'"))) {
-     console.warn("Detectamos comillas en la clave, intentando limpiar...");
-     // Nota: Esto ayuda a que arranque, pero Firebase Auth puede rechazarla igual si no es exacta.
-     // Lo mejor es que el usuario lo arregle en Vercel.
-  }
-
-  if (firebaseConfig.apiKey) {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-  }
-} catch (e) {
-  initError = e;
-}
-
-// ... (Funciones Auxiliares: Gemini, CSV, etc.)
+// ... Funciones Auxiliares ...
 async function callGemini(prompt) {
-  if (!geminiApiKey) return "Falta API Key de IA";
+  if (!geminiApiKey) return "Falta configurar la clave de IA en el código.";
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`,
@@ -128,16 +96,6 @@ const downloadCSV = (data, filename) => {
 
 // --- APP PRINCIPAL ---
 export default function SalesMasterCloud() {
-  // 1. Validación de Claves
-  if (!firebaseConfig.apiKey) {
-    return <ErrorDisplay 
-      message="Faltan las Variables de Entorno" 
-      details="Ve a Vercel -> Settings -> Environment Variables y agrega las claves." 
-    />;
-  }
-
-  if (initError) return <ErrorDisplay message={initError.message} details="Error interno de Firebase." />;
-
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [vendorName, setVendorName] = useState('');
@@ -159,16 +117,9 @@ export default function SalesMasterCloud() {
     if (auth) return onAuthStateChanged(auth, (u) => setUser(u));
   }, []);
 
-  if (authError) {
-    // MUESTRA LA CLAVE REAL QUE ESTÁ FALLANDO
-    return <ErrorDisplay 
-      message={authError.message} 
-      currentKey={firebaseConfig.apiKey}
-      details="Arriba ves la clave que Vercel está intentando usar. Si tiene comillas o espacios, ve a Vercel y corrígela." 
-    />;
-  }
+  if (authError) return <ErrorDisplay message={authError.message} />;
 
-  if (isAuthenticating) return <div className="h-screen flex items-center justify-center bg-slate-50 text-blue-600 gap-3"><RefreshCw className="animate-spin"/> Iniciando SalesMaster...</div>;
+  if (isAuthenticating) return <div className="h-screen flex items-center justify-center bg-slate-50 text-blue-600"><RefreshCw className="animate-spin mr-2"/> Iniciando sistema...</div>;
   if (!role) return <LoginScreen onLogin={(r, name) => { setRole(r); setVendorName(name); }} />;
 
   return role === 'admin' 
@@ -176,9 +127,7 @@ export default function SalesMasterCloud() {
     : <VendorDashboard user={user} myName={vendorName} currentModule={currentModule} setModule={setCurrentModule} />;
 }
 
-// ... (COMPONENTES LOGIN, ADMIN, VENDOR IGUALES A LA VERSIÓN ANTERIOR) ...
-// Pego el resto aquí para que el archivo esté completo y no te falte nada.
-
+// --- PANTALLAS ---
 function LoginScreen({ onLogin }) {
   const [mode, setMode] = useState('menu'); 
   const [inputVal, setInputVal] = useState('');
@@ -301,7 +250,7 @@ function AdminDashboard({ user, currentModule, setModule }) {
   };
 
   const executeUpload = async () => {
-    if (!confirm(`¿Reemplazar base de ${currentModule}?`)) return;
+    if (!confirm(`¿Reemplazar base de ${currentModule === 'sales' ? 'COBRANZA' : 'INSTALACIONES'}?`)) return;
     setUploadStep(3); setSyncing(true); setProgress('Iniciando...');
     try {
         const snapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', collectionName));
