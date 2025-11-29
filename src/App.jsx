@@ -4,8 +4,8 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, query, onSnapshot, writeBatch, doc, getDocs, limit, addDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore';
 import { Shield, Users, Cloud, LogOut, MessageSquare, Search, RefreshCw, Database, Settings, Link as LinkIcon, Check, AlertTriangle, PlayCircle, List, FileSpreadsheet, UploadCloud, Sparkles, PlusCircle, Download, MapPin, Wifi, FileText, Trash2, DollarSign, Wrench, Phone, MessageCircleQuestion, Send, X } from 'lucide-react';
 
-// --- CONFIGURACIÓN DIRECTA (MODO DE EMERGENCIA) ---
-// Tus claves están escritas aquí para evitar errores de Vercel
+// --- CONFIGURACIÓN DIRECTA (MODO EMERGENCIA) ---
+// Al poner la clave aquí directo, eliminamos el error de Vercel al 100%
 const firebaseConfig = {
   apiKey: "AIzaSyDlCB-oW2hF7BLT4t9wYTORbwVh4LLJ96k",
   authDomain: "sales-master-4a972.firebaseapp.com",
@@ -15,18 +15,20 @@ const firebaseConfig = {
   appId: "1:813531501662:web:72ca3e181d0f4e551f50cf"
 };
 
-// Pon aquí tu clave de IA si la tienes a la mano, si no, funcionará sin ella.
-// Si tienes la clave AIza... de Google AI, pégala dentro de las comillas abajo.
+// Deja esto vacío por ahora para que no de error si no tienes la de IA a la mano
 const geminiApiKey = ""; 
 
 // --- INICIALIZACIÓN ---
 let app, auth, db;
+let initError = null;
+
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
 } catch (e) {
   console.error("Error inicializando:", e);
+  initError = e;
 }
 
 // --- PANTALLA DE ERROR ---
@@ -37,9 +39,15 @@ function ErrorDisplay({ message }) {
         <AlertTriangle size={64} className="text-red-600 mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-red-800 mb-2">Problema de Acceso</h1>
         <p className="text-red-600 font-mono text-xs mb-4 bg-red-50 p-2 rounded">{message}</p>
-        <p className="text-slate-600 text-sm">
-           Si ves el error "auth/operation-not-allowed", significa que falta habilitar el acceso <b>Anónimo</b> en Firebase.
-        </p>
+        <div className="text-sm text-slate-600 text-left">
+            <p className="font-bold mb-2">Si ves "auth/operation-not-allowed":</p>
+            <ol className="list-decimal pl-5 space-y-1">
+                <li>Ve a Firebase Console.</li>
+                <li>Entra a <b>Authentication</b>.</li>
+                <li>Pestaña <b>Sign-in method</b>.</li>
+                <li>Activa <b>Anónimo</b>.</li>
+            </ol>
+        </div>
         <button onClick={() => window.location.reload()} className="mt-6 w-full py-3 bg-red-600 text-white rounded-xl font-bold">Reintentar</button>
       </div>
     </div>
@@ -119,7 +127,7 @@ export default function SalesMasterCloud() {
 
   if (authError) return <ErrorDisplay message={authError.message} />;
 
-  if (isAuthenticating) return <div className="h-screen flex items-center justify-center bg-slate-50 text-blue-600"><RefreshCw className="animate-spin mr-2"/> Iniciando sistema...</div>;
+  if (isAuthenticating) return <div className="h-screen flex items-center justify-center bg-slate-50 text-blue-600 gap-2"><RefreshCw className="animate-spin"/> Iniciando sistema...</div>;
   if (!role) return <LoginScreen onLogin={(r, name) => { setRole(r); setVendorName(name); }} />;
 
   return role === 'admin' 
