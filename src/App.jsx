@@ -10,28 +10,31 @@ function ErrorDisplay({ message, details }) {
     <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center font-sans">
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-red-100 max-w-lg w-full">
         <AlertTriangle size={64} className="text-red-600 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-red-800 mb-2">¡Ups! Algo falta</h1>
-        <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-left mb-6 font-mono text-xs text-red-800 break-all">
+        <h1 className="text-2xl font-bold text-red-800 mb-2">Error de Conexión</h1>
+        <p className="text-slate-600 mb-4">Tu aplicación funciona, pero las llaves están mal.</p>
+        
+        <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-left mb-4 font-mono text-xs text-red-800 break-all">
           {message}
         </div>
+
         <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-left text-sm text-blue-900">
-          <strong>Solución:</strong> {details || "Verifica la configuración en Vercel."}
+          <strong>Solución Rápida:</strong><br/>
+          Ve a Vercel -> Settings -> Environment Variables.<br/>
+          Edita <b>VITE_FIREBASE_API_KEY</b>.<br/>
+          Asegúrate de que <b>NO</b> tenga comillas (" ") ni espacios al final.
         </div>
-        <button onClick={() => window.location.reload()} className="mt-8 w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors">
-          Recargar
+
+        <button onClick={() => window.location.reload()} className="mt-6 w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors">
+          Ya corregí la llave, Recargar
         </button>
       </div>
     </div>
   );
 }
 
-// --- CONFIGURACIÓN (MODO SEGURO) ---
+// --- CONFIGURACIÓN SEGURA ---
 const getEnv = () => {
-  try {
-    return import.meta.env || {};
-  } catch (e) {
-    return {};
-  }
+  try { return import.meta.env || {}; } catch (e) { return {}; }
 };
 
 const env = getEnv();
@@ -52,21 +55,19 @@ let app, auth, db;
 let initError = null;
 
 try {
-  if (!firebaseConfig.apiKey) {
-    // No lanzamos error aquí para dejar que el componente ErrorDisplay lo maneje
-  } else {
+  // Intentamos iniciar solo si existe la clave, si no, el componente mostrará el error visualmente
+  if (firebaseConfig.apiKey) {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
   }
 } catch (e) {
-  console.error("Error de inicio:", e);
   initError = e;
 }
 
-// ... Funciones Auxiliares ...
+// --- FUNCIONES AUXILIARES ---
 async function callGemini(prompt) {
-  if (!geminiApiKey) return "Error: Falta API Key de Gemini en Vercel";
+  if (!geminiApiKey) return "Falta API Key de IA";
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`,
@@ -114,17 +115,15 @@ const downloadCSV = (data, filename) => {
 
 // --- APP PRINCIPAL ---
 export default function SalesMasterCloud() {
-  // 1. Chequeo de Configuración
+  // 1. Validación de Claves
   if (!firebaseConfig.apiKey) {
     return <ErrorDisplay 
       message="Faltan las Variables de Entorno" 
-      details="Asegúrate de haber actualizado 'vite.config.js' con 'target: esnext' y de tener las claves en Vercel." 
+      details="Ve a Vercel -> Settings -> Environment Variables y asegúrate de haber agregado las 7 claves." 
     />;
   }
 
-  if (initError) {
-    return <ErrorDisplay message={initError.message} details="Error interno de Firebase." />;
-  }
+  if (initError) return <ErrorDisplay message={initError.message} details="Error interno de Firebase." />;
 
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
@@ -150,11 +149,11 @@ export default function SalesMasterCloud() {
   if (authError) {
     return <ErrorDisplay 
       message={authError.message} 
-      details="Error de autenticación. Habilita el proveedor 'Anónimo' en Firebase Console -> Authentication." 
+      details="Error de autenticación. Revisa que tu API Key en Vercel NO tenga comillas extra. También verifica que habilitaste 'Anónimo' en Firebase Console." 
     />;
   }
 
-  if (isAuthenticating) return <div className="h-screen flex items-center justify-center bg-slate-50 text-blue-600"><RefreshCw className="animate-spin mr-2"/> Iniciando sistema...</div>;
+  if (isAuthenticating) return <div className="h-screen flex items-center justify-center bg-slate-50 text-blue-600 gap-3"><RefreshCw className="animate-spin"/> Iniciando Sistema Izzi...</div>;
   if (!role) return <LoginScreen onLogin={(r, name) => { setRole(r); setVendorName(name); }} />;
 
   return role === 'admin' 
@@ -162,9 +161,6 @@ export default function SalesMasterCloud() {
     : <VendorDashboard user={user} myName={vendorName} currentModule={currentModule} setModule={setCurrentModule} />;
 }
 
-// ... (El resto de los componentes LoginScreen, AdminDashboard y VendorDashboard siguen igual que en la v10) ...
-// Para ahorrar espacio y evitar errores de pegado, asumo que tienes el resto. 
-// SI NO LO TIENES, DÍMELO Y TE LO PEGO AQUÍ ABAJO.
 // --- PANTALLAS ---
 function LoginScreen({ onLogin }) {
   const [mode, setMode] = useState('menu'); 
