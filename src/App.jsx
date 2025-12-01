@@ -4,59 +4,72 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, query, onSnapshot, writeBatch, doc, getDocs, limit, addDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore';
 import { Shield, Users, Cloud, LogOut, MessageSquare, Search, RefreshCw, Database, Settings, Link as LinkIcon, Check, AlertTriangle, PlayCircle, List, FileSpreadsheet, UploadCloud, Sparkles, PlusCircle, Download, MapPin, Wifi, FileText, Trash2, DollarSign, Wrench, Phone, MessageCircleQuestion, Send, X } from 'lucide-react';
 
-// --- CONFIGURACIÓN DIRECTA (MODO EMERGENCIA) ---
-// Al poner la clave aquí directo, eliminamos el error de Vercel al 100%
-const firebaseConfig = {
-  apiKey: "AIzaSyDlCB-oW2hF7BLT4t9wYTORbwVh4LLJ96k",
-  authDomain: "sales-master-4a972.firebaseapp.com",
-  projectId: "sales-master-4a972",
-  storageBucket: "sales-master-4a972.firebasestorage.app",
-  messagingSenderId: "813531501662",
-  appId: "1:813531501662:web:72ca3e181d0f4e551f50cf"
+// --- PANTALLA DE ERROR ---
+function ErrorDisplay({ message, details, currentKey }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center font-sans">
+      <div className="bg-white p-8 rounded-2xl shadow-xl border border-red-100 max-w-lg w-full">
+        <AlertTriangle size={64} className="text-red-600 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold text-red-800 mb-2">Error de Conexión</h1>
+        
+        <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-left mb-4 text-xs text-red-800 font-mono break-all">
+          {message}
+        </div>
+
+        <div className="text-left bg-slate-100 p-3 rounded mb-4">
+            <p className="text-xs font-bold text-slate-500 uppercase">Tu Clave en Vercel:</p>
+            <code className="text-xs text-slate-700 break-all block mt-1 p-1 bg-white border rounded">
+              {currentKey ? currentKey.substring(0, 10) + "..." : "No detectada / Vacía"}
+            </code>
+        </div>
+
+        <p className="text-sm text-slate-600 mb-6">
+            {details}
+        </p>
+
+        <button onClick={() => window.location.reload()} className="w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors">
+          Reintentar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- CONFIGURACIÓN SEGURA ---
+const getEnv = () => {
+  try { return import.meta.env || {}; } catch (e) { return {}; }
 };
 
-// Deja esto vacío por ahora para que no de error si no tienes la de IA a la mano
-const geminiApiKey = ""; 
+const env = getEnv();
+
+const firebaseConfig = {
+  apiKey: env.VITE_FIREBASE_API_KEY,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: env.VITE_FIREBASE_APP_ID
+};
+
+const geminiApiKey = env.VITE_GEMINI_API_KEY;
 
 // --- INICIALIZACIÓN ---
 let app, auth, db;
 let initError = null;
 
 try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
+  if (firebaseConfig.apiKey) {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
 } catch (e) {
-  console.error("Error inicializando:", e);
   initError = e;
 }
 
-// --- PANTALLA DE ERROR ---
-function ErrorDisplay({ message }) {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center font-sans">
-      <div className="bg-white p-8 rounded-2xl shadow-xl border border-red-100 max-w-lg w-full">
-        <AlertTriangle size={64} className="text-red-600 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-red-800 mb-2">Problema de Acceso</h1>
-        <p className="text-red-600 font-mono text-xs mb-4 bg-red-50 p-2 rounded">{message}</p>
-        <div className="text-sm text-slate-600 text-left">
-            <p className="font-bold mb-2">Si ves "auth/operation-not-allowed":</p>
-            <ol className="list-decimal pl-5 space-y-1">
-                <li>Ve a Firebase Console.</li>
-                <li>Entra a <b>Authentication</b>.</li>
-                <li>Pestaña <b>Sign-in method</b>.</li>
-                <li>Activa <b>Anónimo</b>.</li>
-            </ol>
-        </div>
-        <button onClick={() => window.location.reload()} className="mt-6 w-full py-3 bg-red-600 text-white rounded-xl font-bold">Reintentar</button>
-      </div>
-    </div>
-  );
-}
-
-// ... Funciones Auxiliares ...
+// --- HELPERS ---
 async function callGemini(prompt) {
-  if (!geminiApiKey) return "Falta configurar la clave de IA en el código.";
+  if (!geminiApiKey) return "Falta API Key de IA";
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`,
@@ -104,6 +117,16 @@ const downloadCSV = (data, filename) => {
 
 // --- APP PRINCIPAL ---
 export default function SalesMasterCloud() {
+  // 1. Validación de Claves
+  if (!firebaseConfig.apiKey) {
+    return <ErrorDisplay 
+      message="Faltan las Variables de Entorno" 
+      details="Ve a Vercel -> Settings -> Environment Variables y asegúrate de haber agregado las 7 claves." 
+    />;
+  }
+
+  if (initError) return <ErrorDisplay message={initError.message} details="Error interno de Firebase." />;
+
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [vendorName, setVendorName] = useState('');
@@ -125,9 +148,15 @@ export default function SalesMasterCloud() {
     if (auth) return onAuthStateChanged(auth, (u) => setUser(u));
   }, []);
 
-  if (authError) return <ErrorDisplay message={authError.message} />;
+  if (authError) {
+    return <ErrorDisplay 
+      message={authError.message} 
+      currentKey={firebaseConfig.apiKey}
+      details="Error de autenticación. Revisa que tu API Key en Vercel sea EXACTA a la de Firebase (sin comillas extra, sin espacios)." 
+    />;
+  }
 
-  if (isAuthenticating) return <div className="h-screen flex items-center justify-center bg-slate-50 text-blue-600 gap-2"><RefreshCw className="animate-spin"/> Iniciando sistema...</div>;
+  if (isAuthenticating) return <div className="h-screen flex items-center justify-center bg-slate-50 text-blue-600 gap-3"><RefreshCw className="animate-spin"/> Iniciando SalesMaster...</div>;
   if (!role) return <LoginScreen onLogin={(r, name) => { setRole(r); setVendorName(name); }} />;
 
   return role === 'admin' 
@@ -258,7 +287,7 @@ function AdminDashboard({ user, currentModule, setModule }) {
   };
 
   const executeUpload = async () => {
-    if (!confirm(`¿Reemplazar base de ${currentModule === 'sales' ? 'COBRANZA' : 'INSTALACIONES'}?`)) return;
+    if (!confirm(`¿Reemplazar base de ${currentModule}?`)) return;
     setUploadStep(3); setSyncing(true); setProgress('Iniciando...');
     try {
         const snapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', collectionName));
